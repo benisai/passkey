@@ -17,7 +17,9 @@ For access beyond localhost, put the app behind an HTTPS reverse proxy and set `
 - Responsive left navigation with categories and favorites
 - Create, edit, permanently delete, search, and sort logins
 - Show/hide and copy passwords
-- Local password generator using Web Crypto with unbiased sampling
+- Configurable local password generator using Web Crypto with unbiased sampling
+- Encrypted TOTP authenticator keys, live codes, countdowns, and one-click copy
+- Account list and detail pane with quick copy actions
 - Manual lock and 15-minute inactivity lock
 - Encrypted SQLite storage, persistent volume, container health check
 
@@ -56,3 +58,25 @@ python3 -m venv .venv
 ```
 
 The development server listens on port 3100. Production uses Gunicorn as configured in the Dockerfile. No telemetry, external fonts, or third-party frontend requests.
+
+## Password generator
+
+Choose length (12–64 characters), lowercase, uppercase, numbers, symbols, and optional exclusion of similar-looking characters. Every selected character type appears in the result. Passwords are generated locally using Web Crypto with rejection sampling, then can be copied or inserted into a new account with **Use this password**. At least one character type must remain selected.
+
+## Authenticator (2FA codes)
+
+Open **Authenticator → Add authenticator**, or select a saved login and choose **Add authenticator**. Paste the Base32 setup key or an `otpauth://totp/` setup link from the provider. Use the provider's existing enrollment flow to confirm a generated code before relying on it. An account can contain a password, an authenticator, or both.
+
+Codes follow [RFC 6238](https://www.rfc-editor.org/rfc/rfc6238), supporting SHA1/SHA256/SHA512, six or eight digits, and intervals from 15 to 120 seconds. Defaults are SHA1, six digits, and 30 seconds. Setup links supply their own parameters. HOTP and camera/QR scanning are not supported; paste the key or link instead. Keep the server clock synchronized. The display countdown uses server time, and code refreshes do not extend the vault's idle session.
+
+Authenticator secrets are encrypted inside the existing entry payload; existing databases need no schema migration. Locking clears displayed codes and in-memory frontend data. The dedicated code endpoint returns current codes, not setup keys. Secrets are accessible through the unlocked entry editor, just like saved passwords.
+
+This feature generates 2FA codes **for your saved accounts**; it does not add a second factor to unlocking Passkey. Keeping both a password and its authenticator secret in one vault is convenient, but a vault compromise can expose both. Keep recovery codes separately. Removing an authenticator from Passkey does not disable 2FA on the provider's account.
+
+The account list/detail layout and companion tools are inspired by [EasePass](https://github.com/FrozenAssassine/EasePass). The web implementation uses original code and adds no runtime dependencies.
+
+Test the password generator with Node.js 20+:
+
+```sh
+node --test tests/test_generator.mjs
+```
