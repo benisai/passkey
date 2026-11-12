@@ -1,0 +1,20 @@
+services:
+  passkey:
+    build: .
+    ports:
+      - "3100:3100"
+    environment:
+      DATABASE_PATH: /app/data/vault.db
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+    volumes:
+      - vault_data:/app/data
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp:size=32m,mode=1777
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+volumes:
+  vault_data:
