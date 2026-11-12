@@ -4,6 +4,7 @@ import sqlite3
 import tempfile
 import time
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 
 
@@ -99,6 +100,54 @@ class VaultTests(unittest.TestCase):
         self.assertEqual(stranger.get('/api/entries').status_code, 401)
         self.module.sessions.clear()
         self.assertEqual(self.client.get('/api/entries').status_code, 401)
+
+    def test_encrypted_authenticator_lifecycle(self):
+        self.assertEqual(self.client.get('/api/totp').status_code, 401)
+        self.setup()
+        entry = dict(name='Example authenticator', category='Personal',
+                     totp='otpauth://totp/Example?secret=GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ&digits=8')
+        response = self.post('entries', entry)
+        self.assertEqual(response.status_code, 201)
+        identifier = response.json['id']
+        with sqlite3.connect(self.module.DB_PATH) as db:
+            payload = db.execute('SELECT payload FROM entries').fetchone()[0]
+        self.assertNotIn(b'GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ', payload)
+        expiry = next(iter(self.module.sessions.values()))['expires']
+        with patch('app.time.time', return_value=59):
+            result = self.client.get('/api/totp')
+        self.assertEqual(result.json, {'server_time': 59, 'codes': [
+            dict(id=identifier, code='94287082', period=30, valid_until=60)]})
+        self.assertNotIn('Set-Cookie', result.headers)
+        self.assertEqual(next(iter(self.module.sessions.values()))['expires'], expiry)
+        self.assertNotIn('secret', result.get_data(as_text=True))
+        saved = self.client.get('/api/entries').json[0]
+        saved['favorite'] = True
+        self.assertEqual(self.client.put('/api/entries/' + identifier, json=saved, headers=self.headers).status_code, 200)
+        self.assertEqual(self.client.get('/api/entries').json[0]['totp']['digits'], 8)
+        # Removal is allowed when a login password remains.
+        saved.update(totp=None, password='a remaining login password')
+        self.assertEqual(self.client.put('/api/entries/' + identifier, json=saved, headers=self.headers).status_code, 200)
+        self.assertEqual(self.client.get('/api/totp').json['codes'], [])
+        self.post('lock')
+        self.assertEqual(self.client.get('/api/totp').status_code, 401)
+
+    def test_legacy_entries_and_invalid_totp(self):
+        self.setup()
+        entry = dict(name='Legacy login', password='secret', category='Work')
+        response = self.post('entries', entry)
+        self.assertEqual(response.status_code, 201)
+        self.assertIsNone(response.json['totp'])
+        entry['totp'] = 'not a key!'
+        self.assertEqual(self.post('entries', entry).status_code, 400)
+        entry.update(totp=None, password='')
+        self.assertEqual(self.post('entries', entry).status_code, 400)
+        # An encrypted row from before authenticator support has no totp field.
+        with self.module.app.app_context():
+            cipher = next(iter(self.module.sessions.values()))['cipher']
+            payload = cipher.encrypt(b'{"name":"Old","password":"secret"}')
+            self.module.db().execute('UPDATE entries SET payload=?', (payload,))
+            self.module.db().commit()
+        self.assertIsNone(self.client.get('/api/entries').json[0]['totp'])
 
 
 if __name__ == '__main__':

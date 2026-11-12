@@ -3,7 +3,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 DATABASE_PATH=/app/data/vault.d
 WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt && useradd --uid 10001 --create-home vault && mkdir /app/data && chown vault:vault /app/data
-COPY app.py .
+COPY app.py totp.py ./
 COPY static ./static
 USER vault
 EXPOSE 3100

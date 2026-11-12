@@ -14,6 +14,7 @@ from urllib.parse import urlsplit
 from cryptography.fernet import Fernet, InvalidToken
 from flask import Flask, abort, g, jsonify, request, send_from_directory
 from werkzeug.exceptions import HTTPException
+from totp import generate_totp, normalize_totp
 
 app = Flask(__name__, static_folder='static')
 app.config['MAX_CONTENT_LENGTH'] = 64 * 1024
@@ -78,7 +79,9 @@ def protect():
                     del sessions[token]
             session = sessions.get(request.cookies.get('vault_session'))
             if session:
-                session['expires'] = now + SESSION_SECONDS
+                # Automatic code refresh must not keep an unattended vault unlocked.
+                if request.path != '/api/totp':
+                    session['expires'] = now + SESSION_SECONDS
                 g.cipher = session['cipher']
         if request.path not in ('/api/status', '/api/setup', '/api/unlock', '/api/lock') and not session:
             abort(401, 'Your vault is locked. Unlock it to continue.')
@@ -86,7 +89,7 @@ def protect():
 
 @app.after_request
 def headers(response):
-    if hasattr(g, 'cipher') and request.path != '/api/lock' and 'Set-Cookie' not in response.headers:
+    if hasattr(g, 'cipher') and request.path not in ('/api/lock', '/api/totp') and 'Set-Cookie' not in response.headers:
         response.set_cookie('vault_session', request.cookies['vault_session'],
                             httponly=True, samesite='Strict',
                             secure=os.environ.get('COOKIE_SECURE', 'false').lower() == 'true',
@@ -186,12 +189,23 @@ def decrypt(row):
         data = json.loads(g.cipher.decrypt(row['payload']))
     except (InvalidToken, ValueError):
         abort(500, 'An entry could not be decrypted. Restore a known-good backup.')
-    return dict(data, id=row['id'])
+    return dict(data, id=row['id'], totp=data.get('totp'))
 
 
 @app.get('/api/entries')
 def entries():
     return jsonify([decrypt(row) for row in db().execute('SELECT * FROM entries')])
+
+
+@app.get('/api/totp')
+def authenticator_codes():
+    now = time.time()
+    codes = []
+    for row in db().execute('SELECT * FROM entries'):
+        entry = decrypt(row)
+        if entry['totp']:
+            codes.append(dict(id=entry['id'], **generate_totp(entry['totp'], now)))
+    return jsonify(server_time=now, codes=codes)
 
 
 def entry_data():
@@ -202,8 +216,12 @@ def entry_data():
         if not isinstance(value, str) or len(value) > limit:
             abort(400, f'Invalid {field}.')
         result[field] = value if field == 'password' else value.strip()
-    if not result['name'] or not result['password']:
-        abort(400, 'A name and password are required.')
+    try:
+        result['totp'] = normalize_totp(data.get('totp'))
+    except ValueError as error:
+        abort(400, str(error))
+    if not result['name'] or not (result['password'] or result['totp']):
+        abort(400, 'A name and either a password or an authenticator setup key are required.')
     if result['category'] not in ('Personal', 'Work', 'Finance', 'Social', 'Other'):
         abort(400, 'Choose a valid category.')
     if result['url']:
