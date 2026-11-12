@@ -116,11 +116,9 @@ function render() {
   $('totp-count').textContent = entries.filter(entry => entry.totp).length;
   document.querySelectorAll('[data-view]').forEach(button => button.classList.toggle('active', button.dataset.view === view));
   const title = { all: 'All passwords', favorites: 'Favorites', generator: 'Password generator', authenticator: 'Authenticator' }[view] || view;
-  $('page-title').replaceChildren(document.createTextNode(title), element('span', '', '.'));
-  $('breadcrumb').textContent = title;
-  $('page-description').textContent = view === 'generator' ? 'Strong passwords, without the guesswork.' : view === 'authenticator' ? 'Your sign-in codes, right where you need them.' : view === 'favorites' ? 'Your everyday essentials, a little closer.' : 'Everything you need, safely in one place.';
+  $('page-title').textContent = title;
   $('vault-content').hidden = view === 'generator'; $('generator').hidden = view !== 'generator';
-  $('add').textContent = view === 'authenticator' ? '＋ Add authenticator' : '＋ Add password';
+  $('add').textContent = 'Add credentials';
   if (view === 'generator') { if (!$('generated').textContent) generate(); return; }
   const filtered = filteredEntries();
   if (!filtered.some(entry => entry.id === selectedId)) selectedId = filtered[0]?.id || null;
@@ -131,7 +129,7 @@ function render() {
   $('empty').hidden = filtered.length > 0;
   $('empty').querySelector('h2').textContent = view === 'authenticator' ? 'Your codes. All together.' : entries.length ? 'Nothing here just yet.' : 'A fresh start for your passwords.';
   $('empty').querySelector('p').textContent = view === 'authenticator' ? 'Add an account’s setup key to start generating sign-in codes.' : entries.length ? 'Try another search, or add a password to this collection.' : 'Add your first login. We’ll keep it safe and easy to find.';
-  $('empty-add').textContent = view === 'authenticator' ? '＋ Add authenticator' : '＋ Add password';
+  $('empty-add').textContent = 'Add credentials';
   $('results').textContent = `${filtered.length} ${view === 'authenticator' ? 'authenticator' : 'account'}${filtered.length === 1 ? '' : 's'}`;
   renderDetail(); tickCodes();
 }
@@ -152,7 +150,7 @@ function renderDetail() {
 }
 function edit(entry, focusAuthenticator = false) {
   $('entry-form').reset(); $('entry-error').textContent = ''; $('entry-id').value = entry?.id || '';
-  $('dialog-title').textContent = entry ? 'Edit account' : focusAuthenticator ? 'Add an authenticator' : 'Add a password';
+  $('dialog-title').textContent = entry ? 'Edit credentials' : 'Add credentials';
   for (const key of ['name', 'username', 'password', 'url', 'notes', 'category']) {
     $(key).value = entry?.[key] || (key === 'category' ? (['Personal', 'Work', 'Finance', 'Social', 'Other'].includes(view) ? view : 'Personal') : '');
   }
@@ -248,9 +246,12 @@ $('edit-detail').onclick = () => edit(selectedEntry());
 $('add-detail-totp').onclick = () => edit(selectedEntry(), true);
 $('delete-detail').onclick = () => { edit(selectedEntry()); $('delete-dialog').showModal(); };
 $('lock').onclick = async () => { showAuth(); try { await api('lock', 'POST'); } catch (error) { toast(error.message); } };
-$('menu').onclick = () => $('sidebar').classList.toggle('open');
+$('menu').onclick = () => {
+  const open = $('sidebar').classList.toggle('open');
+  $('menu').setAttribute('aria-expanded', String(open));
+};
 document.querySelectorAll('[data-view]').forEach(button => {
-  button.onclick = () => { view = button.dataset.view; $('search').value = ''; render(); $('sidebar').classList.remove('open'); };
+  button.onclick = () => { view = button.dataset.view; $('search').value = ''; render(); $('sidebar').classList.remove('open'); $('menu').setAttribute('aria-expanded', 'false'); };
 });
 $('search').oninput = render; $('sort').onchange = render;
 $('add').onclick = () => edit(undefined, view === 'authenticator'); $('empty-add').onclick = $('add').onclick;

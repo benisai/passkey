@@ -65,7 +65,7 @@ Choose length (12–64 characters), lowercase, uppercase, numbers, symbols, and 
 
 ## Authenticator (2FA codes)
 
-Open **Authenticator → Add authenticator**, or select a saved login and choose **Add authenticator**. Paste the Base32 setup key or an `otpauth://totp/` setup link from the provider. Use the provider's existing enrollment flow to confirm a generated code before relying on it. An account can contain a password, an authenticator, or both.
+Open **Authenticator → Add credentials**, or select a saved login and choose **Set up 2FA**. Paste the Base32 setup key or an `otpauth://totp/` setup link from the provider. Use the provider's existing enrollment flow to confirm a generated code before relying on it. An account can contain a password, an authenticator, or both.
 
 Codes follow [RFC 6238](https://www.rfc-editor.org/rfc/rfc6238), supporting SHA1/SHA256/SHA512, six or eight digits, and intervals from 15 to 120 seconds. Defaults are SHA1, six digits, and 30 seconds. Setup links supply their own parameters. HOTP and camera/QR scanning are not supported; paste the key or link instead. Keep the server clock synchronized. The display countdown uses server time, and code refreshes do not extend the vault's idle session.
 
