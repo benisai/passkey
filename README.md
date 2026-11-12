@@ -5,23 +5,26 @@ A small, self-hosted, single-owner password vault. Flask, SQLite, and vanilla HT
 ## Run with Docker
 
 ```sh
-docker compose up -d --build
+mkdir -p data
+PUID=$(id -u) PGID=$(id -g) docker compose up -d --build
 ```
 
-Open **http://localhost:3100**, then create your master password (at least 12 characters). The first visitor creates the owner: complete setup locally before exposing the service. SQLite persists in the `vault_data` Docker volume through container rebuilds. `docker compose down` keeps the vault; `docker compose down -v` destroys it.
+`PUID` and `PGID` run the container as your host user so the mapped folder is writable on Linux. For subsequent deployments, use the same command or save those numeric IDs as `PUID=...` and `PGID=...` in `.env`. Without overrides, the container uses UID/GID 10001, which requires the folder to be writable by that user.
+
+Open **http://localhost:3100**, then create your master password (at least 12 characters). The first visitor creates the owner: complete setup locally before exposing the service. SQLite is stored at `./data/vault.db` through a bind mount from `./data` to `/app/data`. There is no named Docker volume. Container rebuilds and `docker compose down` leave the host folder intact.
 
 For access beyond localhost, put the app behind an HTTPS reverse proxy and set `COOKIE_SECURE=true` in a `.env` file. Bind the compose port to `127.0.0.1:3100:3100` if the proxy runs on the host. Clipboard access requires HTTPS or localhost in most browsers.
 
 ## Features
 
-- Responsive left navigation with categories and favorites
+- Responsive left navigation: Passwords, Authenticator, Password generator, and categories
 - Create, edit, permanently delete, search, and sort logins
 - Show/hide and copy passwords
 - Configurable local password generator using Web Crypto with unbiased sampling
 - Encrypted TOTP authenticator keys, live codes, countdowns, and one-click copy
 - Account list and detail pane with quick copy actions
 - Manual lock and 15-minute inactivity lock
-- Encrypted SQLite storage, persistent volume, container health check
+- Encrypted SQLite storage, persistent host folder, container health check
 
 ## Security model
 
@@ -37,11 +40,11 @@ For a consistent offline backup, stop the container before copying SQLite (WAL f
 
 ```sh
 docker compose stop passkey
-docker compose cp passkey:/app/data ./vault-backup
+cp -a ./data ./vault-backup
 docker compose start passkey
 ```
 
-To restore, stop the service and copy the backed-up directory contents into `/app/data`, preserving ownership for UID 10001. Never commit database files or backups to source control.
+To restore, stop the service and copy the backed-up directory contents into `./data`, preserving permissions for the configured `PUID`/`PGID`. Use a fresh backup destination each time. Never commit database files or backups to source control.
 
 ## Local development and tests
 
@@ -58,6 +61,20 @@ python3 -m venv .venv
 ```
 
 The development server listens on port 3100. Production uses Gunicorn as configured in the Dockerfile. No telemetry, external fonts, or third-party frontend requests.
+
+## Moving an existing Docker volume to the host folder
+
+If you previously deployed with the named volume, copy its data **before recreating the container** with the new Compose configuration:
+
+```sh
+docker compose stop passkey
+docker compose cp passkey:/app/data ./volume-backup
+mkdir -p data
+cp -a ./volume-backup/. ./data/
+PUID=$(id -u) PGID=$(id -g) docker compose up -d --build
+```
+
+Use an empty `./data` folder for this migration and a new backup destination. Ensure the copied files are writable by the configured host user. Verify your existing master password unlocks the migrated vault before removing the old volume or backup. The old named volume is not removed by this configuration change.
 
 ## Password generator
 

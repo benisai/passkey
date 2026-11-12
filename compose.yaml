@@ -1,13 +1,14 @@
 services:
   passkey:
     build: .
+    user: "${PUID:-10001}:${PGID:-10001}"
     ports:
       - "3100:3100"
     environment:
       DATABASE_PATH: /app/data/vault.db
       COOKIE_SECURE: ${COOKIE_SECURE:-false}
     volumes:
-      - vault_data:/app/data
+      - ./data:/app/data
     restart: unless-stopped
     read_only: true
     tmpfs:
@@ -16,5 +17,3 @@ services:
       - ALL
     security_opt:
       - no-new-privileges:true
-volumes:
-  vault_data:

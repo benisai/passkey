@@ -58,7 +58,7 @@ async function loadVault() {
 function filteredEntries() {
   const query = $('search').value.toLowerCase();
   return entries.filter(entry => (
-    view === 'all' || (view === 'favorites' ? entry.favorite : view === 'authenticator' ? entry.totp : entry.category === view)
+    view === 'all' || (view === 'authenticator' ? entry.totp : entry.category === view)
   ) && [entry.name, entry.username, entry.url, entry.category].some(value => (value || '').toLowerCase().includes(query)))
     .sort($('sort').value === 'updated' ? (a, b) => b.updated - a.updated : (a, b) => a.name.localeCompare(b.name));
 }
@@ -112,10 +112,10 @@ function authenticatorCard(entry) {
 function render() {
   const favorites = entries.filter(entry => entry.favorite).length;
   $('total-stat').textContent = $('all-count').textContent = entries.length;
-  $('favorite-stat').textContent = $('fav-count').textContent = favorites;
+  $('favorite-stat').textContent = favorites;
   $('totp-count').textContent = entries.filter(entry => entry.totp).length;
   document.querySelectorAll('[data-view]').forEach(button => button.classList.toggle('active', button.dataset.view === view));
-  const title = { all: 'All passwords', favorites: 'Favorites', generator: 'Password generator', authenticator: 'Authenticator' }[view] || view;
+  const title = { all: 'Passwords', generator: 'Password generator', authenticator: 'Authenticator' }[view] || view;
   $('page-title').textContent = title;
   $('vault-content').hidden = view === 'generator'; $('generator').hidden = view !== 'generator';
   $('add').textContent = 'Add credentials';
